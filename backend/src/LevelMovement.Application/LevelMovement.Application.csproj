@@ -9,7 +9,6 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Behaviors\" />
-    <Folder Include="Vehicles\DTOs\" />
     <Folder Include="Vehicles\Queries\" />
     <Folder Include="Vehicles\Validators\" />
   </ItemGroup>

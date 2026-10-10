@@ -1,4 +1,9 @@
-﻿using FluentValidation;
+using LevelMovement.Api.Behaviors;
+using LevelMovement.Application.Bookings.Organisers;
+using LevelMovement.Application.Bookings.Queries;
+using LevelMovement.Application.Vehicles.Queries;
+using LevelMovement.Domain.Managers;
+using FluentValidation;
 using LevelMovement.Application.Behaviors;
 using LevelMovement.Application.Interfaces.Persistence;
 using LevelMovement.Application.Interfaces.Services;
@@ -47,6 +52,8 @@ public static class ConfigurationExtension
     {
         services.AddScoped<IVehiclesService, VehiclesService>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<IBookingEligibilityService, BookingEligibilityService>();
+        services.AddScoped<VehicleBookingManager>();
     }
 
     public static void ConfigureCommands(
@@ -55,17 +62,23 @@ public static class ConfigurationExtension
         services.AddMediatR(configuration =>
         {
             configuration.RegisterServicesFromAssemblyContaining<
-                CreateVehicleCommand>();
+                UpsertVehicleCommand>();
 
-            // Validate first; save only after the handler succeeds.
+            configuration.AddOpenBehavior(typeof(RequestLoggingBehavior<,>));
             configuration.AddOpenBehavior(typeof(ValidationBehavior<,>));
             configuration.AddOpenBehavior(typeof(UnitOfWorkBehavior<,>));
         });
 
         services.AddScoped<
-            IValidator<CreateVehicleCommand>,
-            CreateVehicleCommandValidator>();
+            IValidator<UpsertVehicleCommand>,
+            UpsertVehicleCommandValidator>();
 
-        services.AddScoped<CreateVehicleOrganiser>();
+        services.AddScoped<UpsertVehicleOrganiser>();
+        services.AddScoped<VehicleReadOrganiser>();
+        services.AddScoped<DeleteVehicleOrganiser>();
+        services.AddScoped<BookingEligibilityOrganiser>();
+        services.AddScoped<IValidator<GetVehicleDetailsQuery>, GetVehicleDetailsValidator>();
+        services.AddScoped<IValidator<DeleteVehicleCommand>, DeleteVehicleValidator>();
+        services.AddScoped<IValidator<ValidateBookingQuery>, ValidateBookingValidator>();
     }
 }

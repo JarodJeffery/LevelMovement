@@ -1,24 +1,20 @@
-﻿using LevelMovement.Application.Interfaces.Services;
+using LevelMovement.Application.Interfaces.Services;
 using LevelMovement.Application.Vehicles.Commands;
+using LevelMovement.Application.Vehicles.Results;
 using LevelMovement.Domain.ValueObjects.Vehicles;
 using LevelMovement.Domain.Vehicles;
 
 namespace LevelMovement.Application.Vehicles.Organisers;
 
-public class CreateVehicleOrganiser
+public sealed class UpsertVehicleOrganiser(IVehiclesService service)
 {
-    private readonly IVehiclesService _service;
-
-    public CreateVehicleOrganiser(IVehiclesService service)
-    {
-        _service = service;
-    }
-
-    public async Task<Guid> ExecuteAsync(CreateVehicleCommand command, CancellationToken cancellationToken)
+    public Task<UpsertVehicleResult> ExecuteAsync(
+        UpsertVehicleCommand command, CancellationToken cancellationToken)
     {
         var vehicle = new Vehicle
         {
-            Id = Guid.NewGuid(),
+            Id = command.ConcurrencyStamp.HasValue ? Guid.Empty : Guid.NewGuid(),
+            ConcurrencyStamp = command.ConcurrencyStamp ?? Guid.Empty,
             RegistrationNumber = new RegistrationNumber(command.RegistrationNumber),
             Make = command.Make,
             Model = command.Model,
@@ -27,7 +23,6 @@ public class CreateVehicleOrganiser
             CreatedDate = DateTime.UtcNow,
             IsDeleted = false
         };
-        await _service.UpsertVehicleAsync(vehicle, cancellationToken);
-        return vehicle.Id;
+        return service.UpsertVehicleAsync(vehicle, cancellationToken);
     }
 }
