@@ -1,0 +1,9 @@
+**/bin
+**/obj
+**/.vs
+**/*.user
+**/*.Backup.tmp
+**/appsettings.Local.json
+.env
+.env.*
+tests

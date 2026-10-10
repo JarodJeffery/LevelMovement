@@ -5,5 +5,8 @@
     <Project Path="src/LevelMovement.Infrastructure/LevelMovement.Infrastructure.csproj" />
     <Project Path="src/LevelMovement.Api/LevelMovement.Api.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Unit/LevelMovement.Tests/LevelMovement.Tests.csproj" />
+  </Folder>
 </Solution>
 

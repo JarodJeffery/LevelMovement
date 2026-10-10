@@ -8,5 +8,12 @@
     <ProjectReference Include="../LevelMovement.Domain/LevelMovement.Domain.csproj" />
     <ProjectReference Include="../LevelMovement.Application/LevelMovement.Application.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Persistence\Interceptors\" />
+    <Folder Include="Persistence\Migrations\" />
+  </ItemGroup>
 </Project>
 

@@ -1,0 +1,51 @@
+# Local development: copy .env.example to .env, set a password, then:
+# docker compose up --build -d
+# Swagger: http://localhost:5080/swagger
+# Stop with docker compose down. Data stays in the named volume.
+# SQL Server Developer edition is for development/testing.
+name: levelmovement
+
+x-api-environment: &api-environment
+  ASPNETCORE_ENVIRONMENT: Development
+  ConnectionStrings__LevelMovement: 'Server=sqlserver,1433;Database=LevelMovement;User Id=sa;Password="${MSSQL_SA_PASSWORD:?Copy .env.example to .env and set MSSQL_SA_PASSWORD}";Encrypt=True;TrustServerCertificate=True;'
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Set MSSQL_SA_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${SQL_PORT:-14330}:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "SQLCMDPASSWORD=\"$$MSSQL_SA_PASSWORD\" /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -l 5 -Q \"SELECT 1\" -o /dev/null"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
+
+  migrate:
+    build: .
+    image: levelmovement-api:local
+    environment: *api-environment
+    command: ["--migrate"]
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build: .
+    image: levelmovement-api:local
+    environment: *api-environment
+    ports:
+      - "127.0.0.1:${API_PORT:-5080}:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  sqlserver-data:
