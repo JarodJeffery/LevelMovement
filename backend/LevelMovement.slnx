@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LevelMovement.Domain/LevelMovement.Domain.csproj" />
+    <Project Path="src/LevelMovement.Application/LevelMovement.Application.csproj" />
+    <Project Path="src/LevelMovement.Infrastructure/LevelMovement.Infrastructure.csproj" />
+    <Project Path="src/LevelMovement.Api/LevelMovement.Api.csproj" />
+  </Folder>
+</Solution>
+
