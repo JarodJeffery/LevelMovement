@@ -5,9 +5,8 @@ public interface IVehicleRepository
 {
     Task<IReadOnlyList<Vehicle>> GetAllAsync(CancellationToken cancellationToken);
     Task<Vehicle?> GetForBookingAsync(RegistrationNumber registrationNumber, CancellationToken cancellationToken);
-    Task DeleteAsync(RegistrationNumber registrationNumber, Guid stamp, CancellationToken cancellationToken);
-    Task<Vehicle> UpsertAsync(Vehicle vehicle, CancellationToken cancellationToken);
+    Task AddAsync(Vehicle vehicle, CancellationToken cancellationToken);
+    void Update(Vehicle vehicle, Guid expectedStamp);
     Task<Vehicle?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
-    Task<Vehicle?> GetByRegistrationNumberAsync(
-        RegistrationNumber registrationNumber, CancellationToken cancellationToken);
+    Task<Vehicle?> GetByRegistrationNumberAsync(RegistrationNumber registrationNumber, CancellationToken cancellationToken);
 }

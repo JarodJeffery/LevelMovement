@@ -23,4 +23,4 @@ export interface UpsertVehicleResponseDto {
   concurrencyStamp: string;
 }
 export interface BookingEligibilityDto { registrationNumber: string; eligible: boolean; message: string }
-export interface ApiProblem { title?: string; detail?: string; traceId?: string; errors?: Record<string, string[]> }
+export interface ApiProblem { title?: string; detail?: string; errors?: Record<string, string[]> }

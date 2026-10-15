@@ -24,23 +24,22 @@ public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger) : I
         logger.Log(status == 500 ? LogLevel.Error : LogLevel.Warning, exception,
             "Request failed. TraceId {TraceId} Endpoint {Endpoint} CqrsRequest {CqrsRequest} FailingFunction {FailingFunction} StatusCode {StatusCode}",
             context.TraceIdentifier, endpoint, context.Items["CqrsRequest"] ?? "ModelBinding", method, status);
-        var extensions = new Dictionary<string, object?> { ["traceId"] = context.TraceIdentifier };
         if (exception is ValidationException validation)
         {
             var errors = validation.Errors.GroupBy(error => System.Text.Json.JsonNamingPolicy.CamelCase.ConvertName(error.PropertyName))
                 .ToDictionary(group => group.Key, group => group.Select(error => error.ErrorMessage).ToArray());
-            await Results.ValidationProblem(errors, extensions: extensions).ExecuteAsync(context);
+            await Results.ValidationProblem(errors).ExecuteAsync(context);
             return true;
         }
         var (title, detail) = exception switch
         {
             KeyNotFoundException => ("Vehicle was not found.", "No vehicle is available for this operation."),
-            DbUpdateConcurrencyException => ("Vehicle has changed.", "Reload the vehicle and use its latest concurrency stamp before updating or deleting."),
-            VehicleUnavailableException => ("Vehicle cannot be booked.", "Deleted vehicles cannot be booked."),
-            DbUpdateException when status == 409 => ("Registration number already exists.", "Use a different registration number. Deleted vehicles also retain their registration."),
-            _ => ("An unexpected error occurred.", "Use the trace ID when reporting this error.")
+            DbUpdateConcurrencyException => ("Vehicle has changed.", "Reload the page before updating or deleting."),
+            VehicleUnavailableException => ("Vehicle cannot be booked.", "Vehicle has been deleted."),
+            DbUpdateException when status == 409 => ("Registration number already exists.", "Use a different registration number."),
+            _ => ("An unexpected error occurred.", "Please try again.")
         };
-        await Results.Problem(statusCode: status, title: title, detail: detail, extensions: extensions).ExecuteAsync(context);
+        await Results.Problem(statusCode: status, title: title, detail: detail).ExecuteAsync(context);
         return true;
     }
 

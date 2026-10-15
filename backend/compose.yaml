@@ -35,9 +35,16 @@ services:
   api:
     build: .
     image: levelmovement-api:local
-    environment: *api-environment
+    environment:
+      <<: *api-environment
+      ASPNETCORE_HTTP_PORTS: ""
+      ASPNETCORE_HTTPS_PORTS: "8443"
+      Kestrel__Certificates__Default__Path: /https/localhost.pfx
+      Kestrel__Certificates__Default__Password: ${HTTPS_CERT_PASSWORD:?Run scripts/Setup-LocalHttps.ps1 before starting HTTPS}
+    volumes:
+      - ./certs/localhost.pfx:/https/localhost.pfx:ro
     ports:
-      - "127.0.0.1:${API_PORT:-5080}:8080"
+      - "127.0.0.1:${API_PORT:-5080}:8443"
     depends_on:
       migrate:
         condition: service_completed_successfully

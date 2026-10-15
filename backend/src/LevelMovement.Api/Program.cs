@@ -17,7 +17,6 @@ builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
     {
         var context = actionContext.HttpContext;
         var problem = new ValidationProblemDetails(actionContext.ModelState) { Status = 400 };
-        problem.Extensions["traceId"] = context.TraceIdentifier;
         context.RequestServices.GetRequiredService<ILogger<ApiExceptionHandler>>().LogWarning(
             "Model binding failed. TraceId {TraceId} Endpoint {Endpoint} CqrsRequest {CqrsRequest} FailingFunction {FailingFunction} StatusCode {StatusCode}",
             context.TraceIdentifier, context.GetEndpoint()?.DisplayName, "ModelBinding", context.GetEndpoint()?.DisplayName, 400);
@@ -25,7 +24,7 @@ builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
     };
 });
 builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
-    context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier);
+    context.ProblemDetails.Extensions.Remove("traceId"));
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -54,6 +53,19 @@ if (migrateOnly)
 }
 
 app.UseExceptionHandler();
+if (!app.Environment.IsDevelopment()) app.UseHsts();
+app.Use(async (context, next) =>
+{
+    if (!context.Request.IsHttps)
+    {
+        context.RequestServices.GetRequiredService<ILogger<Program>>().LogWarning(
+            "Rejected non-HTTPS request. TraceId {TraceId} Endpoint {Endpoint}", context.TraceIdentifier, context.Request.Path);
+        await Results.Problem(statusCode: 400, title: "HTTPS is required.", detail: "Use the HTTPS address for this service.").ExecuteAsync(context);
+        return;
+    }
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    await next(context);
+});
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

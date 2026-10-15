@@ -13,7 +13,7 @@ test('register, edit, reject stale stamps, delete, and reject booking of the del
   const details = await (await request.get(`/api/vehicles/${registration}`)).json();
   const duplicate = await request.post('/api/vehicles', { data: { registrationNumber: registration, make: 'Toyota', model: 'Corolla', year: 2024, dailyRate: 10 } });
   expect(duplicate.status()).toBe(409);
-  expect((await duplicate.json()).traceId).toBeTruthy();
+  expect(await duplicate.json()).not.toHaveProperty("traceId");
   const list = await (await request.get('/api/vehicles')).json();
   const listed = list.find((vehicle: { registrationNumber: string }) => vehicle.registrationNumber === registration);
   expect(listed).not.toHaveProperty('id');
@@ -27,7 +27,7 @@ test('register, edit, reject stale stamps, delete, and reject booking of the del
   expect(updated.concurrencyStamp).not.toBe(details.concurrencyStamp);
   const stale = await request.delete(`/api/vehicles/${registration}`, { data: { concurrencyStamp: details.concurrencyStamp } });
   expect(stale.status()).toBe(409);
-  expect((await stale.json()).traceId).toBeTruthy();
+  expect(await stale.json()).not.toHaveProperty("traceId");
   await page.getByRole('link', { name: 'Back to vehicles' }).click();
   await page.getByLabel('Registration to check').fill(registration);
   await page.getByRole('button', { name: 'Check eligibility' }).click();
@@ -39,8 +39,8 @@ test('register, edit, reject stale stamps, delete, and reject booking of the del
   await expect(page.getByRole('link', { name: `View / edit ${registration}` })).toHaveCount(0);
   await page.getByLabel('Registration to check').fill(registration);
   await page.getByRole('button', { name: 'Check eligibility' }).click();
-  await expect(page.getByRole('alert')).toContainText('Deleted vehicles cannot be booked.');
-  await expect(page.getByRole('alert')).toContainText('Trace ID:');
+  await expect(page.getByRole('alert')).toContainText('Vehicle has been deleted.');
+  await expect(page.getByText('Trace ID:', { exact: false })).toHaveCount(0);
   expect((await request.get(`/api/vehicles/${registration}`)).status()).toBe(404);
   const duplicateDeleted = await request.post('/api/vehicles', { data: { registrationNumber: registration, make: 'Toyota', model: 'Corolla', year: 2024, dailyRate: 10 } });
   expect(duplicateDeleted.status()).toBe(409);
@@ -66,4 +66,16 @@ test('preserve edits on a real concurrent update and explicitly reload before de
   await expect(page.getByRole('heading', { name: 'Vehicles', exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: 'test-results/vehicles-mobile.png', fullPage: true });
+});
+
+test('invalid fields are highlighted and diagnostics are not displayed', async ({ page }) => {
+  await page.goto('/vehicles/new');
+  await page.getByLabel('Daily rate (R)', { exact: true }).fill('-10');
+  await page.getByRole('button', { name: 'Register vehicle', exact: true }).click();
+  const rate = page.getByLabel('Daily rate (R)', { exact: true });
+  await expect(rate).toHaveAttribute('aria-invalid', 'true');
+  await expect(rate).toHaveCSS('border-top-color', 'rgb(181, 60, 48)');
+  await expect(page.getByText('Daily rate must be at least R0.01.')).toBeVisible();
+  await expect(page.getByText('Trace ID:', { exact: false })).toHaveCount(0);
+  await page.screenshot({ path: 'test-results/validation-fields.png', fullPage: true });
 });

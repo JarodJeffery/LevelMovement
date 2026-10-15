@@ -8,7 +8,7 @@ public abstract class RegistrationValidator<T> : AbstractValidator<T>
 {
     protected RegistrationValidator(System.Linq.Expressions.Expression<Func<T, string>> selector)
     {
-        RuleFor(selector).NotEmpty().Must(value => value is null || value.Trim().ToUpperInvariant().Length <= RegistrationNumber.MaxLength)
+        RuleFor(selector).Cascade(CascadeMode.Stop).NotEmpty().Must(value => value is null || RegistrationNumber.Normalize(value).Length <= RegistrationNumber.MaxLength)
             .WithMessage("Registration number must not exceed 20 characters.");
     }
 }

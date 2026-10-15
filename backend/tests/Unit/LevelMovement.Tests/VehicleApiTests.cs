@@ -21,7 +21,7 @@ public sealed class VehicleApiTests
     public async Task InsertReturnsNormalizedDetailsAndSavedStampWithoutId()
     {
         using var factory = new VehicleApiFactory();
-        using var client = factory.CreateClient();
+        using var client = factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         var response = await client.PostAsJsonAsync("/api/vehicles",
             new UpsertVehicleCommand(" ab123 gp ", "Toyota", "Corolla", 2024, 10.125m));
 
@@ -33,11 +33,11 @@ public sealed class VehicleApiTests
         using var scope = factory.Services.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<LevelMovementDbContext>();
         var vehicle = await context.Vehicles.SingleAsync();
-        Assert.Equal("AB123 GP", result.RegistrationNumber);
+        Assert.Equal("AB123GP", result.RegistrationNumber);
         Assert.Equal(vehicle.Make, result.Make);
         Assert.Equal(vehicle.Model, result.Model);
-        Assert.Equal("Registered vehicle AB123 GP, make Toyota, model Corolla.", result.Message);
-        Assert.Equal("AB123 GP", vehicle.RegistrationNumber.Value);
+        Assert.Equal("Registered vehicle AB123GP, make Toyota, model Corolla.", result.Message);
+        Assert.Equal("AB123GP", vehicle.RegistrationNumber.Value);
         Assert.Equal(10.12m, vehicle.DailyRate.Amount);
         Assert.NotEqual(Guid.Empty, vehicle.ConcurrencyStamp);
         Assert.Equal(vehicle.ConcurrencyStamp, result.ConcurrencyStamp);
@@ -51,7 +51,7 @@ public sealed class VehicleApiTests
     public async Task InvalidCommandReturnsFieldErrorsWithoutSaving()
     {
         using var factory = new VehicleApiFactory();
-        using var client = factory.CreateClient();
+        using var client = factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         var response = await client.PostAsJsonAsync("/api/vehicles",
             new UpsertVehicleCommand("", "", "Corolla", 999, 10m));
 
@@ -69,7 +69,7 @@ public sealed class VehicleApiTests
     public async Task SwaggerIncludesBothRequestsAndResponseExamples()
     {
         using var factory = new VehicleApiFactory();
-        using var client = factory.CreateClient();
+        using var client = factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         var document = await client.GetFromJsonAsync<JsonElement>("/swagger/v1/swagger.json");
         var operation = document.GetProperty("paths").GetProperty("/api/vehicles").GetProperty("post");
         var examples = operation.GetProperty("requestBody").GetProperty("content")
@@ -93,7 +93,7 @@ public sealed class VehicleApiTests
     public async Task UpdateByRegistrationPreservesIdentityAndCreatedDateAndReturnsSavedStamp()
     {
         using var factory = new VehicleApiFactory();
-        using var client = factory.CreateClient();
+        using var client = factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         var created = await Insert(client);
         Guid originalId;
         DateTime originalDate;
@@ -110,7 +110,7 @@ public sealed class VehicleApiTests
                 created.ConcurrencyStamp));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var updated = (await response.Content.ReadFromJsonAsync<UpSertVehicleResponse>())!;
-        Assert.Equal("Updated vehicle AB123 GP, make Toyota, model Corolla Cross.", updated.Message);
+        Assert.Equal("Updated vehicle AB123GP, make Toyota, model Corolla Cross.", updated.Message);
         Assert.NotEqual(created.ConcurrencyStamp, updated.ConcurrencyStamp);
         using var readScope = factory.Services.CreateScope();
         var stored = await readScope.ServiceProvider.GetRequiredService<LevelMovementDbContext>()
@@ -129,7 +129,7 @@ public sealed class VehicleApiTests
     public async Task StaleStampReturnsConflictWithoutOverwritingEvenForUnchangedValues(bool unchanged)
     {
         using var factory = new VehicleApiFactory();
-        using var client = factory.CreateClient();
+        using var client = factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         var created = await Insert(client);
         var change = new UpsertVehicleCommand(
             "AB123 GP", "Toyota", "Updated model", 2025, 20m, created.ConcurrencyStamp);
@@ -154,7 +154,7 @@ public sealed class VehicleApiTests
     public async Task ReturnedStampCanBeUsedForAnotherUpdate()
     {
         using var factory = new VehicleApiFactory();
-        using var client = factory.CreateClient();
+        using var client = factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         var created = await Insert(client);
         var first = await client.PostAsJsonAsync("/api/vehicles",
             new UpsertVehicleCommand("AB123 GP", "Toyota", "First edit", 2024, 10m,
@@ -173,7 +173,7 @@ public sealed class VehicleApiTests
     public async Task MissingUpdateReturnsNotFoundWithoutInserting()
     {
         using var factory = new VehicleApiFactory();
-        using var client = factory.CreateClient();
+        using var client = factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         var response = await client.PostAsJsonAsync("/api/vehicles",
             new UpsertVehicleCommand("MISSING", "Toyota", "Corolla", 2024, 10m, Guid.NewGuid()));
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
@@ -187,7 +187,7 @@ public sealed class VehicleApiTests
     public async Task EmptyStampIsInvalidRatherThanAnInsert()
     {
         using var factory = new VehicleApiFactory();
-        using var client = factory.CreateClient();
+        using var client = factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         var response = await client.PostAsJsonAsync("/api/vehicles",
             new UpsertVehicleCommand("AB123 GP", "Toyota", "Corolla", 2024, 10m, Guid.Empty));
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -200,12 +200,12 @@ public sealed class VehicleApiTests
     public async Task DeletedVehicleIsNotUpdatedOrRestored()
     {
         using var factory = new VehicleApiFactory();
-        using var client = factory.CreateClient();
+        using var client = factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         var created = await Insert(client);
         using (var scope = factory.Services.CreateScope())
         {
             var database = scope.ServiceProvider.GetRequiredService<LevelMovementDbContext>();
-            (await database.Vehicles.SingleAsync()).IsDeleted = true;
+            (await database.Vehicles.SingleAsync()).Delete();
             await database.SaveChangesAsync();
         }
         var response = await client.PostAsJsonAsync("/api/vehicles",

@@ -5,27 +5,22 @@ using Microsoft.EntityFrameworkCore;
 
 public sealed class VehicleRepository(LevelMovementDbContext context) : IVehicleRepository
 {
-    public async Task<Vehicle> UpsertAsync(Vehicle vehicle, CancellationToken cancellationToken)
+    public async Task AddAsync(Vehicle vehicle, CancellationToken cancellationToken)
     {
-        if (vehicle.ConcurrencyStamp == Guid.Empty)
-        {
-            context.Vehicles.Add(vehicle);
-            return vehicle;
-        }
+        ArgumentNullException.ThrowIfNull(vehicle);
+        await context.Vehicles.AddAsync(vehicle, cancellationToken);
+    }
 
-        var existing = await GetByRegistrationNumberAsync(vehicle.RegistrationNumber, cancellationToken)
-            ?? throw new KeyNotFoundException("Vehicle was not found.");
-
-        context.Entry(existing).Property(item => item.ConcurrencyStamp).OriginalValue =
-            vehicle.ConcurrencyStamp;
-
-        existing.Make = vehicle.Make;
-        existing.Model = vehicle.Model;
-        existing.Year = vehicle.Year;
-        existing.DailyRate = vehicle.DailyRate;
-
-        context.Entry(existing).Property(item => item.Make).IsModified = true;
-        return existing;
+    public void Update(Vehicle vehicle, Guid expectedStamp)
+    {
+        ArgumentNullException.ThrowIfNull(vehicle);
+        if (expectedStamp == Guid.Empty) throw new ArgumentException("A concurrency stamp is required.", nameof(expectedStamp));
+        var entry = context.Entry(vehicle);
+        if (entry.State is EntityState.Detached or EntityState.Added)
+            throw new InvalidOperationException("Load the persisted vehicle before staging an update.");
+        entry.Property(item => item.ConcurrencyStamp).OriginalValue = expectedStamp;
+        // Issue a write even for unchanged details so stale no-op edits still fail.
+        entry.Property(item => item.Make).IsModified = true;
     }
 
     public async Task<IReadOnlyList<Vehicle>> GetAllAsync(CancellationToken cancellationToken)
@@ -36,19 +31,10 @@ public sealed class VehicleRepository(LevelMovementDbContext context) : IVehicle
         => context.Vehicles.IgnoreQueryFilters().AsNoTracking().SingleOrDefaultAsync(
             vehicle => vehicle.RegistrationNumber == registrationNumber, cancellationToken);
 
-    public async Task DeleteAsync(RegistrationNumber registrationNumber, Guid stamp, CancellationToken cancellationToken)
-    {
-        var vehicle = await GetByRegistrationNumberAsync(registrationNumber, cancellationToken)
-            ?? throw new KeyNotFoundException("Vehicle was not found.");
-        context.Entry(vehicle).Property(item => item.ConcurrencyStamp).OriginalValue = stamp;
-        vehicle.IsDeleted = true;
-    }
-
     public Task<Vehicle?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
         => context.Vehicles.SingleOrDefaultAsync(vehicle => vehicle.Id == id, cancellationToken);
 
-    public Task<Vehicle?> GetByRegistrationNumberAsync(
-        RegistrationNumber registrationNumber, CancellationToken cancellationToken)
+    public Task<Vehicle?> GetByRegistrationNumberAsync(RegistrationNumber registrationNumber, CancellationToken cancellationToken)
         => context.Vehicles.SingleOrDefaultAsync(
             vehicle => vehicle.RegistrationNumber == registrationNumber, cancellationToken);
 }
