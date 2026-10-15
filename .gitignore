@@ -17,3 +17,6 @@
 
 /frontend/test-results/
 /frontend/playwright-report/
+
+/backend/certs/
+/docs
