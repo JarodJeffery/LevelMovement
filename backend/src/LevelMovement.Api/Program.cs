@@ -14,8 +14,9 @@ using Microsoft.OpenApi;
 using LevelMovement.Api.Extensions;
 
 var migrateOnly = args.Contains("--migrate");
+var seedDemo = args.Contains("--seed-demo");
 var builder = WebApplication.CreateBuilder(
-    args.Where(argument => argument != "--migrate").ToArray());
+    args.Where(argument => argument is not "--migrate" and not "--seed-demo").ToArray());
 
 builder.Services.AddControllers();
 builder.Services.AddProblemDetails();
@@ -38,11 +39,21 @@ builder.Services.ConfigureCommands();
 
 var app = builder.Build();
 
-if (migrateOnly)
+if (seedDemo && !app.Environment.IsDevelopment())
+{
+    throw new InvalidOperationException("Demo data can only be seeded in Development.");
+}
+
+if (migrateOnly || seedDemo)
 {
     await using var scope = app.Services.CreateAsyncScope();
     var database = scope.ServiceProvider.GetRequiredService<LevelMovementDbContext>();
     await database.Database.MigrateAsync();
+    if (seedDemo)
+    {
+        var added = await DemoDataSeeder.SeedAsync(database);
+        app.Logger.LogInformation("Demo data: added {Count} vehicles (50 demo registrations).", added);
+    }
     return;
 }
 
