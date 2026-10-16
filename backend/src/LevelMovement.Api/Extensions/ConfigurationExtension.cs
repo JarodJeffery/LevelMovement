@@ -1,4 +1,8 @@
-﻿using FluentValidation;
+using LevelMovement.Api.Behaviors;
+using LevelMovement.Application.Bookings.Organisers;
+using LevelMovement.Application.Bookings.Queries;
+using LevelMovement.Application.Vehicles.Queries;
+using FluentValidation;
 using LevelMovement.Application.Behaviors;
 using LevelMovement.Application.Interfaces.Persistence;
 using LevelMovement.Application.Interfaces.Services;
@@ -7,7 +11,7 @@ using LevelMovement.Application.Vehicles.Organisers;
 using LevelMovement.Application.Vehicles.Validators;
 using LevelMovement.Infrastructure.Persistence;
 using LevelMovement.Infrastructure.Persistence.Interceptors;
-using LevelMovement.Infrastructure.Services;
+using LevelMovement.Application.Services;
 using LevelMovement.Infrastructure.UnitOfWork;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -29,6 +33,7 @@ public static class ConfigurationExtension
                 ?? throw new InvalidOperationException(
                     "ConnectionStrings:LevelMovement is missing.");
 
+            ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
             options.UseSqlServer(connectionString);
 
             options.AddInterceptors(
@@ -47,6 +52,7 @@ public static class ConfigurationExtension
     {
         services.AddScoped<IVehiclesService, VehiclesService>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<IBookingEligibilityService, BookingEligibilityService>();
     }
 
     public static void ConfigureCommands(
@@ -55,17 +61,23 @@ public static class ConfigurationExtension
         services.AddMediatR(configuration =>
         {
             configuration.RegisterServicesFromAssemblyContaining<
-                CreateVehicleCommand>();
+                UpsertVehicleCommand>();
 
-            // Validate first; save only after the handler succeeds.
+            configuration.AddOpenBehavior(typeof(RequestLoggingBehavior<,>));
             configuration.AddOpenBehavior(typeof(ValidationBehavior<,>));
             configuration.AddOpenBehavior(typeof(UnitOfWorkBehavior<,>));
         });
 
         services.AddScoped<
-            IValidator<CreateVehicleCommand>,
-            CreateVehicleCommandValidator>();
+            IValidator<UpsertVehicleCommand>,
+            UpsertVehicleCommandValidator>();
 
-        services.AddScoped<CreateVehicleOrganiser>();
+        services.AddScoped<UpsertVehicleOrganiser>();
+        services.AddScoped<VehicleReadOrganiser>();
+        services.AddScoped<DeleteVehicleOrganiser>();
+        services.AddScoped<BookingEligibilityOrganiser>();
+        services.AddScoped<IValidator<GetVehicleDetailsQuery>, GetVehicleDetailsValidator>();
+        services.AddScoped<IValidator<DeleteVehicleCommand>, DeleteVehicleValidator>();
+        services.AddScoped<IValidator<ValidateBookingQuery>, ValidateBookingValidator>();
     }
 }

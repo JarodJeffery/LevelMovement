@@ -6,6 +6,14 @@ public sealed record DailyRate
 
     public DailyRate(decimal amount)
     {
-        Amount = decimal.Round(amount, 2, MidpointRounding.ToEven);
+        var rounded = decimal.Round(amount, 2, MidpointRounding.ToEven);
+
+        if (rounded <= 0)
+            throw new ArgumentOutOfRangeException(
+                nameof(amount), "Daily rate must be greater than zero.");
+
+        if (rounded > 9999999999999999.99m)
+            throw new ArgumentOutOfRangeException(nameof(amount), "Daily rate exceeds database precision.");
+        Amount = rounded;
     }
 }

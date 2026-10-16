@@ -1,24 +1,52 @@
+using LevelMovement.Application.Vehicles.Queries;
 using LevelMovement.Application.Vehicles.Commands;
 using MediatR;
+using LevelMovement.Application.Vehicles.DTOs;
 using Microsoft.AspNetCore.Mvc;
 
 namespace LevelMovement.Api.Controllers;
 
 [ApiController]
 [Route("api/vehicles")]
+[ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError)]
 public sealed class VehiclesController(ISender sender) : ControllerBase
 {
     [HttpPost]
-    [ProducesResponseType<CreateVehicleResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType<UpSertVehicleResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<UpSertVehicleResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
-    public async Task<ActionResult<CreateVehicleResponse>> Create(
-        [FromBody] CreateVehicleCommand command,
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<UpSertVehicleResponse>> Upsert(
+        [FromBody] UpsertVehicleCommand command,
         CancellationToken cancellationToken)
     {
-        var id = await sender.Send(command, cancellationToken);
-        return StatusCode(StatusCodes.Status201Created, new CreateVehicleResponse(id));
+        var result = await sender.Send(command, cancellationToken);
+        return StatusCode(
+            result.IsCreated ? StatusCodes.Status201Created : StatusCodes.Status200OK,
+            result.ToResponse());
+    }
+
+    [HttpGet]
+    [ProducesResponseType<IReadOnlyList<VehicleSummaryResponse>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<VehicleSummaryResponse>>> GetAll(CancellationToken cancellationToken)
+        => Ok(await sender.Send(new GetVehiclesQuery(), cancellationToken));
+
+    [HttpGet("{registrationNumber}")]
+    [ProducesResponseType<VehicleDetailsResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<VehicleDetailsResponse>> GetDetails(string registrationNumber, CancellationToken cancellationToken)
+        => Ok(await sender.Send(new GetVehicleDetailsQuery(registrationNumber), cancellationToken));
+
+    [HttpDelete("{registrationNumber}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Delete(string registrationNumber, [FromBody] DeleteVehicleRequest request, CancellationToken cancellationToken)
+    {
+        await sender.Send(new DeleteVehicleCommand(registrationNumber, request.ConcurrencyStamp), cancellationToken);
+        return NoContent();
     }
 }
-
-public sealed record CreateVehicleResponse(Guid Id);

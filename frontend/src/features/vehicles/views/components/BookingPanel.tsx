@@ -1,0 +1,7 @@
+import { formatRegistrationMessage } from '../../models/registrationNumber';
+import { useBookingController } from '../../controllers/useBookingController';
+import { ErrorNotice } from '../../../../shared/components/ErrorNotice';
+export function BookingPanel() {
+  const controller = useBookingController();
+  return <section className="panel booking"><p className="eyebrow">ELIGIBILITY DEMO</p><h2>Can this vehicle be booked?</h2><p>Try an active registration, then delete the vehicle and check again. This check does not create a booking.</p><form noValidate onSubmit={event => { event.preventDefault(); controller.submit(); }}><label htmlFor="booking-registration">Registration to check</label><div className="inline"><input id="booking-registration" ref={controller.inputRef} aria-invalid={!!controller.fieldError} aria-describedby={controller.fieldError ? "booking-registration-error" : undefined} value={controller.registration} onChange={event => { controller.setRegistration(event.target.value); }} placeholder="KW 00 KB GP" /><button disabled={controller.check.isPending}>Check eligibility</button></div>{controller.fieldError && <p id="booking-registration-error" className="field-error" role="alert">{controller.fieldError}</p>}</form><ErrorNotice error={controller.check.error} />{controller.check.data && <p className="notice success" role="status">{formatRegistrationMessage(controller.check.data.message, controller.check.data.registrationNumber)}</p>}</section>;
+}

@@ -1,25 +1,31 @@
-using FluentValidation;
 using LevelMovement.Api.Middleware;
 using LevelMovement.Api.Swagger;
-using LevelMovement.Application.Behaviors;
-using LevelMovement.Application.Interfaces.Persistence;
-using LevelMovement.Application.Vehicles.Commands;
-using LevelMovement.Application.Vehicles.Organisers;
-using LevelMovement.Application.Vehicles.Validators;
 using LevelMovement.Infrastructure.Persistence;
-using LevelMovement.Infrastructure.Persistence.Interceptors;
-using LevelMovement.Infrastructure.UnitOfWork;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 using LevelMovement.Api.Extensions;
+using Microsoft.AspNetCore.Mvc;
 
 var migrateOnly = args.Contains("--migrate");
 var seedDemo = args.Contains("--seed-demo");
 var builder = WebApplication.CreateBuilder(
     args.Where(argument => argument is not "--migrate" and not "--seed-demo").ToArray());
 
-builder.Services.AddControllers();
-builder.Services.AddProblemDetails();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
+{
+    options.InvalidModelStateResponseFactory = actionContext =>
+    {
+        var context = actionContext.HttpContext;
+        var problem = new ValidationProblemDetails(actionContext.ModelState) { Status = 400 };
+        context.RequestServices.GetRequiredService<ILogger<ApiExceptionHandler>>().LogWarning(
+            "Model binding failed. TraceId {TraceId} Endpoint {Endpoint} CqrsRequest {CqrsRequest} FailingFunction {FailingFunction} StatusCode {StatusCode}",
+            context.TraceIdentifier, context.GetEndpoint()?.DisplayName, "ModelBinding", context.GetEndpoint()?.DisplayName, 400);
+        return new BadRequestObjectResult(problem);
+    };
+});
+builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = context =>
+    context.ProblemDetails.Extensions.Remove("traceId"));
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -28,7 +34,7 @@ builder.Services.AddSwaggerGen(options =>
     {
         Title = "Level Movement Vehicles API",
         Version = "v1",
-        Description = "Vehicle creation API with example requests and responses."
+        Description = "Vehicle CRUD and booking eligibility demo with example requests and responses."
     });
     options.OperationFilter<VehicleExamplesFilter>();
 });
@@ -58,6 +64,19 @@ if (migrateOnly || seedDemo)
 }
 
 app.UseExceptionHandler();
+if (!app.Environment.IsDevelopment()) app.UseHsts();
+app.Use(async (context, next) =>
+{
+    if (!context.Request.IsHttps)
+    {
+        context.RequestServices.GetRequiredService<ILogger<Program>>().LogWarning(
+            "Rejected non-HTTPS request. TraceId {TraceId} Endpoint {Endpoint}", context.TraceIdentifier, context.Request.Path);
+        await Results.Problem(statusCode: 400, title: "HTTPS is required.", detail: "Use the HTTPS address for this service.").ExecuteAsync(context);
+        return;
+    }
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    await next(context);
+});
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

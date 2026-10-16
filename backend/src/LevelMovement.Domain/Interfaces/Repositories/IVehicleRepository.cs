@@ -1,12 +1,12 @@
-﻿using LevelMovement.Domain.Vehicles;
+using LevelMovement.Domain.ValueObjects.Vehicles;
+using LevelMovement.Domain.Vehicles;
 
 public interface IVehicleRepository
 {
-    Task UpsertAsync(
-        Vehicle vehicle,
-        CancellationToken cancellationToken);
-
-    Task<Vehicle?> GetByIdAsync(
-        Guid id,
-        CancellationToken cancellationToken);
+    Task<IReadOnlyList<Vehicle>> GetAllAsync(CancellationToken cancellationToken);
+    Task<Vehicle?> GetForBookingAsync(RegistrationNumber registrationNumber, CancellationToken cancellationToken);
+    Task AddAsync(Vehicle vehicle, CancellationToken cancellationToken);
+    void Update(Vehicle vehicle, Guid expectedStamp);
+    Task<Vehicle?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
+    Task<Vehicle?> GetByRegistrationNumberAsync(RegistrationNumber registrationNumber, CancellationToken cancellationToken);
 }

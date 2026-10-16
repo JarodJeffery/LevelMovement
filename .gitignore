@@ -14,3 +14,9 @@
 *.suo
 *.tsbuildinfo
 *.Backup.tmp
+
+/frontend/test-results/
+/frontend/playwright-report/
+
+/backend/certs/
+/docs

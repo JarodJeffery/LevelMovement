@@ -13,13 +13,20 @@ public class VehicleValueObjectTests
     [InlineData("10.135", "10.14")]
     [InlineData("10.1249", "10.12")]
     [InlineData("10.1251", "10.13")]
-    [InlineData("0", "0")]
-    [InlineData("-10.125", "-10.12")]
-    public void DailyRateRoundsToEvenWithoutRestrictingSign(string input, string expected)
+    public void DailyRateRoundsPositiveAmountsToEven(string input, string expected)
     {
         var rate = new DailyRate(decimal.Parse(input, CultureInfo.InvariantCulture));
 
         Assert.Equal(decimal.Parse(expected, CultureInfo.InvariantCulture), rate.Amount);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-10.125")]
+    [InlineData("0.005")]
+    public void DailyRateRejectsAmountsThatRoundToZeroOrBelow(string input)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new DailyRate(decimal.Parse(input, CultureInfo.InvariantCulture)));
     }
 
     [Fact]
@@ -33,10 +40,30 @@ public class VehicleValueObjectTests
     }
 
     [Fact]
-    public void RegistrationPreservesInternalSpacesAndPunctuation()
+    public void RegistrationRemovesWhitespaceAndPreservesPunctuation()
     {
-        Assert.Equal("AB-123  GP", new RegistrationNumber("  ab-123  gp  ").Value);
+        Assert.Equal("AB-123GP", new RegistrationNumber("  ab-123  gp  ").Value);
         Assert.Equal(new string('A', 20), new RegistrationNumber(" " + new string('a', 20) + " ").Value);
+    }
+
+    [Theory]
+    [InlineData("KW00KBGP")]
+    [InlineData("KW 00 KB GP")]
+    [InlineData(" kw\t00\r\nkb\u00a0gp ")]
+    [InlineData("KW\u200300\u202fKB\u3000GP")]
+    public void RegistrationSpacingDoesNotChangeIdentity(string input)
+    {
+        var registration = new RegistrationNumber(input);
+        Assert.Equal("KW00KBGP", registration.Value);
+        Assert.Equal(new RegistrationNumber("KW00KBGP"), registration);
+        Assert.Equal(new RegistrationNumber("KW00KBGP").GetHashCode(), registration.GetHashCode());
+    }
+
+    [Fact]
+    public void RegistrationLengthIsCheckedAfterWhitespaceRemoval()
+    {
+        Assert.Equal(new string('A', 20), new RegistrationNumber(string.Join(" ", Enumerable.Repeat("a", 20))).Value);
+        Assert.Throws<ArgumentException>(() => new RegistrationNumber(string.Join(" ", Enumerable.Repeat("a", 21))));
     }
 
     [Theory]
