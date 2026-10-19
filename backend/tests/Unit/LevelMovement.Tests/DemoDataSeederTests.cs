@@ -4,6 +4,8 @@ using LevelMovement.Infrastructure.Persistence;
 using LevelMovement.Infrastructure.Persistence.Interceptors;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using LevelMovement.Application.Vehicles.Commands;
+using LevelMovement.Application.Vehicles.Validators;
 
 namespace LevelMovement.Tests;
 
@@ -33,6 +35,7 @@ public sealed class DemoDataSeederTests : IDisposable
         Assert.Equal(50, vehicles.Count);
         Assert.Equal(50, vehicles.Select(vehicle => vehicle.RegistrationNumber.Value).Distinct().Count());
         Assert.True(vehicles.Select(vehicle => vehicle.Make).Distinct().Count() > 10);
+        Assert.Equal(2023, vehicles.Single(vehicle => vehicle.Model == "Fronx").Year.Value);
         Assert.All(vehicles, vehicle =>
         {
             Assert.NotEqual(Guid.Empty, vehicle.Id);
@@ -41,6 +44,10 @@ public sealed class DemoDataSeederTests : IDisposable
             Assert.True(vehicle.DailyRate.Amount > 0);
             Assert.True(vehicle.CreatedDate < DateTime.UtcNow);
             Assert.False(vehicle.IsDeleted);
+            var validation = new UpsertVehicleCommandValidator().Validate(new UpsertVehicleCommand(
+                vehicle.RegistrationNumber.Value, vehicle.Make, vehicle.Model, vehicle.Year.Value,
+                vehicle.DailyRate.Amount, vehicle.ConcurrencyStamp));
+            Assert.True(validation.IsValid, validation.ToString());
         });
     }
 
@@ -50,9 +57,9 @@ public sealed class DemoDataSeederTests : IDisposable
         await DemoDataSeeder.SeedAsync(_database);
         var vehicles = await _database.Vehicles.OrderBy(vehicle => vehicle.Id).ToListAsync();
         var edited = vehicles[0];
-        edited.DailyRate = new DailyRate(999.99m);
+        edited.UpdateDetails(edited.Make, edited.Model, edited.Year, new DailyRate(999.99m));
         var deleted = vehicles[1];
-        deleted.IsDeleted = true;
+        deleted.Delete();
         var userVehicle = CreateVehicle("USER123 GP");
         _database.Vehicles.Add(userVehicle);
         await _database.SaveChangesAsync();
@@ -71,9 +78,9 @@ public sealed class DemoDataSeederTests : IDisposable
     }
 
     [Fact]
-    public async Task AddsOnlyMissingDemoRegistrationsToAPartiallySeededDatabase()
+    public async Task AddsOnlyMissingDemoRegistrationsWhenExistingPlateIsCompact()
     {
-        var existing = CreateVehicle("DEMO001 GP");
+        var existing = CreateVehicle("DEMO001GP");
         _database.Vehicles.Add(existing);
         await _database.SaveChangesAsync();
         _database.ChangeTracker.Clear();
@@ -84,16 +91,12 @@ public sealed class DemoDataSeederTests : IDisposable
             .SingleAsync(vehicle => vehicle.Id == existing.Id)).Make);
     }
 
-    private static Vehicle CreateVehicle(string registration) => new()
-    {
-        Id = Guid.NewGuid(),
-        RegistrationNumber = new RegistrationNumber(registration),
-        Make = "Existing",
-        Model = "Vehicle",
-        Year = new VehicleYear(2024),
-        DailyRate = new DailyRate(500m),
-        CreatedDate = DateTime.UtcNow
-    };
+    private static Vehicle CreateVehicle(string registration) => Vehicle.Register(
+        new RegistrationNumber(registration),
+        "Existing",
+        "Vehicle",
+        new VehicleYear(2024),
+        new DailyRate(500m));
 
     public void Dispose()
     {

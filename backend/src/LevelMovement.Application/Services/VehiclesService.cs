@@ -8,10 +8,18 @@ namespace LevelMovement.Application.Services;
 
 public sealed class VehiclesService(IVehicleRepository repository) : IVehiclesService
 {
-    public async Task<IReadOnlyList<VehicleSummaryResponse>> GetAllAsync(CancellationToken cancellationToken)
-        => (await repository.GetAllAsync(cancellationToken)).Select(vehicle =>
-            new VehicleSummaryResponse(vehicle.RegistrationNumber.Value,
-                vehicle.Make, vehicle.Model, vehicle.Year.Value, vehicle.DailyRate.Amount, vehicle.CreatedDate)).ToArray();
+    public async Task<VehiclePageResponse> GetPageAsync(int pageNumber, int pageSize, CancellationToken cancellationToken)
+    {
+        var totalCount = await repository.CountActiveAsync(cancellationToken);
+        var totalPages = (int)(((long)totalCount + pageSize - 1) / pageSize);
+        var vehicles = pageNumber > totalPages
+            ? new List<Vehicle>()
+            : await repository.GetAllAsync(pageNumber, pageSize, cancellationToken);
+        var items = vehicles.Select(vehicle => new VehicleSummaryResponse(
+            vehicle.RegistrationNumber.Value, vehicle.Make, vehicle.Model, vehicle.Year.Value,
+            vehicle.DailyRate.Amount, vehicle.CreatedDate)).ToArray();
+        return new VehiclePageResponse(items, pageNumber, totalPages, items.Length);
+    }
 
     public async Task<VehicleDetailsResponse> GetDetailsAsync(string registrationNumber, CancellationToken cancellationToken)
     {

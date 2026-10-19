@@ -7,6 +7,12 @@ export interface VehicleSummaryDto {
   createdDate: string;
 }
 export interface VehicleDetailsDto extends VehicleSummaryDto { concurrencyStamp: string }
+export interface VehiclePageDto {
+  items: VehicleSummaryDto[];
+  pageNumber: number;
+  totalPages: number;
+  count: number;
+}
 export interface UpsertVehicleDto {
   registrationNumber: string;
   make: string;

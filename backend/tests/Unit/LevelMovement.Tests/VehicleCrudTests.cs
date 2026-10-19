@@ -23,7 +23,8 @@ public sealed class VehicleCrudTests
         using var factory = new VehicleApiTests.VehicleApiFactory();
         using var client = factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         var created = await Create(client);
-        var list = await client.GetFromJsonAsync<JsonElement>("/api/vehicles");
+        var page = await client.GetFromJsonAsync<JsonElement>("/api/vehicles");
+        var list = page.GetProperty("items");
         Assert.Equal(1, list.GetArrayLength());
         Assert.False(list[0].TryGetProperty("concurrencyStamp", out _));
         Assert.False(list[0].TryGetProperty("id", out _));
@@ -47,7 +48,7 @@ public sealed class VehicleCrudTests
         var deletion = await Delete(client, created.ConcurrencyStamp);
         Assert.Equal(HttpStatusCode.NoContent, deletion.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/vehicles/AB123%20GP")).StatusCode);
-        Assert.Empty((await client.GetFromJsonAsync<VehicleSummaryResponse[]>("/api/vehicles"))!);
+        Assert.Empty((await client.GetFromJsonAsync<VehiclePageResponse>("/api/vehicles"))!.Items);
         var rejected = await client.PostAsJsonAsync("/api/bookings/validate", new { registrationNumber = "AB123 GP" });
         Assert.Equal(HttpStatusCode.Conflict, rejected.StatusCode);
         var error = await rejected.Content.ReadFromJsonAsync<JsonElement>();
@@ -123,7 +124,7 @@ public sealed class VehicleCrudTests
         Assert.False(problem.TryGetProperty("traceId", out _));
         Assert.False(string.IsNullOrWhiteSpace(log.Values["TraceId"]?.ToString()));
         Assert.Equal("GetVehiclesQuery", log.Values["CqrsRequest"]);
-        Assert.Contains("FailingService.GetAllAsync", log.Values["FailingFunction"]!.ToString());
+        Assert.Contains("FailingService.GetPageAsync", log.Values["FailingFunction"]!.ToString());
         Assert.NotNull(log.Exception);
     }
 
@@ -168,7 +169,7 @@ public sealed class VehicleCrudTests
         => client.SendAsync(new HttpRequestMessage(HttpMethod.Delete, "/api/vehicles/AB123%20GP") { Content = JsonContent.Create(new DeleteVehicleRequest(stamp)) });
     private sealed class FailingService : IVehiclesService
     {
-        public Task<IReadOnlyList<VehicleSummaryResponse>> GetAllAsync(CancellationToken cancellationToken) => throw new InvalidOperationException("private-database-secret");
+        public Task<VehiclePageResponse> GetPageAsync(int pageNumber, int pageSize, CancellationToken cancellationToken) => throw new InvalidOperationException("private-database-secret");
         public Task<VehicleDetailsResponse> GetDetailsAsync(string registrationNumber, CancellationToken cancellationToken) => throw new NotImplementedException();
         public Task DeleteAsync(string registrationNumber, Guid stamp, CancellationToken cancellationToken) => throw new NotImplementedException();
         public Task<UpsertVehicleResult> RegisterAsync(RegistrationNumber registrationNumber, string make, string model,

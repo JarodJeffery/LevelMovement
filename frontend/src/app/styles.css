@@ -10,7 +10,7 @@
 * { box-sizing: border-box; }
 body { margin: 0; }
 a { color: #007cae; text-underline-offset: 4px; }
-button, input { font: inherit; }
+button, input, select { font: inherit; }
 button, .button {
   border: 0;
   border-radius: 10px;
@@ -68,6 +68,13 @@ p { line-height: 1.75; color: var(--text-muted); margin: 8px 0 16px; font-size: 
 .section-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
 .section-heading h2 { margin: 0; }
 .table-scroll { overflow: auto; }
+.pagination { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; border-top: 1px solid #edf1f6; padding-top: 20px; margin-top: 16px; }
+.pagination p { margin: 0; }
+.page-size, .page-buttons { display: flex; align-items: center; gap: 12px; font-size: .83rem; }
+.page-size label { margin: 0; }
+.page-size select { padding: 9px; border: 1px solid #cbd5e0; border-radius: 8px; background: white; }
+.page-buttons span { white-space: nowrap; }
+select:focus-visible { outline: 3px solid #007cae; outline-offset: 3px; }
 table { border-collapse: collapse; width: 100%; text-align: left; font-size: .85rem; }
 th { font-size: .71rem; color: #586c80; font-weight: 600; padding: 15px 12px; background: #eef8fe; }
 td { padding: 21px 12px; border-bottom: 1px solid #edf1f6; }

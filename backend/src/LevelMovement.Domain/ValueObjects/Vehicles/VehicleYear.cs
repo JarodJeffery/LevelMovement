@@ -6,7 +6,7 @@ public sealed record VehicleYear
 
     public VehicleYear(int value)
     {
-        if (value is < 1000 or > 9999)
+        if (value  < 1000 || value > 9999)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(value), value, "Vehicle year must be between 1000 and 9999.");

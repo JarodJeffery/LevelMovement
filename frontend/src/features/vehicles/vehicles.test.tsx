@@ -14,13 +14,14 @@ function mount(path: string) {
   return client;
 }
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+const paged = (items: VehicleDetailsDto[]) => ({ items, pageNumber: 1, totalPages: items.length ? 1 : 0, count: items.length });
 afterEach(() => vi.unstubAllGlobals());
 describe('Vehicle workspace', () => {
   it('displays spaced plates while links and save requests use the compact identity', async () => {
     const plate = { ...vehicle, registrationNumber: 'KW00KBGP' };
     const fetch = vi.fn(async (url: string, options?: RequestInit) => {
       if (options?.method === 'POST') return json({ ...plate, message: 'Updated vehicle KW00KBGP, make Toyota, model Corolla.' });
-      return json(url.includes('/vehicles/') ? plate : [plate]);
+      return json(url.includes('/vehicles/') ? plate : paged([plate]));
     });
     vi.stubGlobal('fetch', fetch);
     mount('/vehicles');
@@ -40,7 +41,7 @@ describe('Vehicle workspace', () => {
   it('normalizes booking input and formats the eligibility message', async () => {
     const fetch = vi.fn(async (_url: string, options?: RequestInit) => options?.method === 'POST'
       ? json({ registrationNumber: 'KW00KBGP', eligible: true, message: 'Vehicle KW00KBGP is eligible for booking. No booking has been created.' })
-      : json([]));
+      : json(paged([])));
     vi.stubGlobal('fetch', fetch);
     mount('/vehicles');
     const user = userEvent.setup();
@@ -52,7 +53,7 @@ describe('Vehicle workspace', () => {
     expect(JSON.parse(call[1]!.body as string)).toEqual({ registrationNumber: 'KW00KBGP' });
   });
   it('shows an empty fleet and validates creation fields before requesting a save', async () => {
-    const fetch = vi.fn().mockResolvedValue(json([]));
+    const fetch = vi.fn().mockResolvedValue(json(paged([])));
     vi.stubGlobal('fetch', fetch);
     mount('/vehicles');
     expect(await screen.findByText('Your fleet starts here')).toBeInTheDocument();
@@ -68,7 +69,7 @@ describe('Vehicle workspace', () => {
     const plate = { ...vehicle, registrationNumber: 'KW00KBGP' };
     const fetch = vi.fn(async (url: string, options?: RequestInit) => options?.method === 'POST'
       ? json({ ...plate, message: 'Registered vehicle KW00KBGP, make Toyota, model Corolla.' }, 201)
-      : json(url.includes('/vehicles/') ? plate : [plate]));
+      : json(url.includes('/vehicles/') ? plate : paged([plate])));
     vi.stubGlobal('fetch', fetch);
     mount('/vehicles/new');
     const user = userEvent.setup();
@@ -132,7 +133,7 @@ describe('Vehicle workspace', () => {
     const fetch = vi.fn(async (url: string, options?: RequestInit) => {
       if (options?.method === 'POST') { saved = true; return json({ ...vehicle, concurrencyStamp: 'second-stamp', message: 'Updated vehicle.' }); }
       if (options?.method === 'DELETE') return new Response(null, { status: 204 });
-      return json(url.includes('/vehicles/') ? { ...vehicle, concurrencyStamp: saved ? 'second-stamp' : 'first-stamp' } : []);
+      return json(url.includes('/vehicles/') ? { ...vehicle, concurrencyStamp: saved ? 'second-stamp' : 'first-stamp' } : paged([]));
     });
     vi.stubGlobal('fetch', fetch);
     mount('/vehicles/CA%20123-456');
@@ -170,7 +171,7 @@ describe('Vehicle workspace', () => {
   it('shows booking rejection without backend diagnostics', async () => {
     const fetch = vi.fn(async (_url: string, options?: RequestInit) => options?.method === 'POST'
       ? json({ title: 'Vehicle cannot be booked.', detail: 'Deleted vehicles cannot be booked.', traceId: 'trace-booking' }, 409)
-      : json([]));
+      : json(paged([])));
     vi.stubGlobal('fetch', fetch);
     mount('/vehicles');
     const user = userEvent.setup();
@@ -195,7 +196,7 @@ describe('Vehicle workspace', () => {
     expect(screen.queryByText(/server-validation-trace|Trace ID:/)).not.toBeInTheDocument();
   });
   it('highlights the booking registration when validation fails', async () => {
-    const fetch = vi.fn().mockResolvedValue(json([]));
+    const fetch = vi.fn().mockResolvedValue(json(paged([])));
     vi.stubGlobal('fetch', fetch);
     mount('/vehicles');
     await screen.findByText('Your fleet starts here');

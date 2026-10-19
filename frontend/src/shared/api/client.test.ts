@@ -3,6 +3,14 @@ import { request } from './client';
 import { vehiclesApi } from '../../features/vehicles/api/vehiclesApi';
 afterEach(() => vi.unstubAllGlobals());
 describe('defensive API handling', () => {
+  it.each([[], { items: [] }, { items: [], count: -1 }, { items: [], count: 1.5 }, { items: 'invalid', count: 1 },
+    { items: [], pageNumber: 1, totalPages: 1, count: 1 },
+    { items: [], pageNumber: 0, totalPages: 0, count: 0 },
+    { items: [], pageNumber: 1, totalPages: -1, count: 0 },
+  ])('rejects an invalid paged envelope', async body => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(body))));
+    await expect(vehiclesApi.list()).rejects.toThrow('The API returned incomplete vehicle details.');
+  });
   it('rejects malformed successful JSON', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('<html>wrong server</html>', { status: 200 })));
     await expect(request('/vehicles')).rejects.toThrow('The API returned an invalid response.');

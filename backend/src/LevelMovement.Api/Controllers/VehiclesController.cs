@@ -28,9 +28,11 @@ public sealed class VehiclesController(ISender sender) : ControllerBase
     }
 
     [HttpGet]
-    [ProducesResponseType<IReadOnlyList<VehicleSummaryResponse>>(StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<VehicleSummaryResponse>>> GetAll(CancellationToken cancellationToken)
-        => Ok(await sender.Send(new GetVehiclesQuery(), cancellationToken));
+    [ProducesResponseType<VehiclePageResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<VehiclePageResponse>> GetAll(
+        CancellationToken cancellationToken, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        => Ok(await sender.Send(new GetVehiclesQuery(pageNumber, pageSize), cancellationToken));
 
     [HttpGet("{registrationNumber}")]
     [ProducesResponseType<VehicleDetailsResponse>(StatusCodes.Status200OK)]

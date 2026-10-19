@@ -6,7 +6,7 @@ namespace LevelMovement.Application.Interfaces.Services;
 
 public interface IVehiclesService
 {
-    Task<IReadOnlyList<VehicleSummaryResponse>> GetAllAsync(CancellationToken cancellationToken);
+    Task<VehiclePageResponse> GetPageAsync(int pageNumber, int pageSize, CancellationToken cancellationToken);
     Task<VehicleDetailsResponse> GetDetailsAsync(string registrationNumber, CancellationToken cancellationToken);
     Task DeleteAsync(string registrationNumber, Guid stamp, CancellationToken cancellationToken);
     Task<UpsertVehicleResult> RegisterAsync(RegistrationNumber registrationNumber, string make, string model,

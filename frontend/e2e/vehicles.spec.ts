@@ -1,4 +1,14 @@
 import { test, expect } from '@playwright/test';
+import type { APIRequestContext } from '@playwright/test';
+
+async function findVehiclePage(request: APIRequestContext, registration: string) {
+  for (let pageNumber = 1; ; pageNumber++) {
+    const page = await (await request.get(`/api/vehicles?pageNumber=${pageNumber}&pageSize=10`)).json();
+    const vehicle = page.items.find((item: { registrationNumber: string }) => item.registrationNumber === registration);
+    if (vehicle) return { vehicle, pageNumber };
+    if (pageNumber >= page.totalPages) throw new Error(`Vehicle ${registration} was missing from all active pages.`);
+  }
+}
 test('register, edit, reject stale stamps, delete, and reject booking of the deleted vehicle', async ({ page, request }) => {
   const registration = `E2E-${Date.now().toString(36).toUpperCase()}`;
   await page.goto('/vehicles/new');
@@ -14,8 +24,7 @@ test('register, edit, reject stale stamps, delete, and reject booking of the del
   const duplicate = await request.post('/api/vehicles', { data: { registrationNumber: registration, make: 'Toyota', model: 'Corolla', year: 2024, dailyRate: 10 } });
   expect(duplicate.status()).toBe(409);
   expect(await duplicate.json()).not.toHaveProperty("traceId");
-  const list = await (await request.get('/api/vehicles')).json();
-  const listed = list.find((vehicle: { registrationNumber: string }) => vehicle.registrationNumber === registration);
+  const { vehicle: listed, pageNumber } = await findVehiclePage(request, registration);
   expect(listed).not.toHaveProperty('id');
   expect(listed).not.toHaveProperty('concurrencyStamp');
   await page.getByLabel('Model', { exact: true }).fill('Yaris');
@@ -29,13 +38,14 @@ test('register, edit, reject stale stamps, delete, and reject booking of the del
   expect(stale.status()).toBe(409);
   expect(await stale.json()).not.toHaveProperty("traceId");
   await page.getByRole('link', { name: 'Back to vehicles' }).click();
+  await page.goto('/vehicles?pageNumber=' + pageNumber + '&pageSize=10');
   await page.getByLabel('Registration to check').fill(registration);
   await page.getByRole('button', { name: 'Check eligibility' }).click();
   await expect(page.getByRole('status')).toContainText('eligible for booking');
   await page.getByRole('link', { name: `View / edit ${registration}` }).click();
   await page.getByRole('button', { name: 'Delete vehicle', exact: true }).click();
   await page.getByRole('button', { name: 'Confirm delete', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText(`Deleted vehicle ${registration}`);
+  await expect(page.getByRole('status').filter({ hasText: `Deleted vehicle ${registration}` })).toBeVisible();
   await expect(page.getByRole('link', { name: `View / edit ${registration}` })).toHaveCount(0);
   await page.getByLabel('Registration to check').fill(registration);
   await page.getByRole('button', { name: 'Check eligibility' }).click();

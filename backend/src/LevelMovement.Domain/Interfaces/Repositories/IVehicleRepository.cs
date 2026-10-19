@@ -3,7 +3,8 @@ using LevelMovement.Domain.Vehicles;
 
 public interface IVehicleRepository
 {
-    Task<IReadOnlyList<Vehicle>> GetAllAsync(CancellationToken cancellationToken);
+    Task<List<Vehicle>> GetAllAsync(int page, int size, CancellationToken cancellationToken);
+    Task<int> CountActiveAsync(CancellationToken cancellationToken);
     Task<Vehicle?> GetForBookingAsync(RegistrationNumber registrationNumber, CancellationToken cancellationToken);
     Task AddAsync(Vehicle vehicle, CancellationToken cancellationToken);
     void Update(Vehicle vehicle, Guid expectedStamp);

@@ -1,130 +1,123 @@
 # Level Movement
 
-Vehicle management assessment with a .NET 10 backend and a separate React frontend.
+Vehicle management demo using .NET 10, SQL Server, React and TypeScript.
+The normal development setup runs **SQL Server in Docker**, the **API locally**
+in Visual Studio or a terminal, and the **frontend locally** with Vite.
 
-## Domain design and request flow
+## Prerequisites
 
-`Vehicle` is the aggregate root for vehicle management. It has private setters and
-exposes `Register`, `UpdateDetails`, `Delete`, and `EnsureEligibleForBooking`.
-Registration creates the identity and UTC creation date. Editing preserves those
-values and the registration number. The entity validates all proposed details
-before changing its state, and deleted vehicles cannot be edited or booked.
+| Tool | Purpose |
+| --- | --- |
+| .NET 10 SDK | Build and run the API and backend tests |
+| Docker Desktop with Linux containers | Host the SQL Server database |
+| Node.js 24.15 or later in the 24.x line, with npm | Run the frontend and current test dependencies |
+| PowerShell on Windows | Run the HTTPS setup script and commands below |
+| Visual Studio with .NET 10 support (optional) | Run and debug the API with F5 |
+| SQL Server Management Studio (optional) | Inspect data and run the cleanup script |
 
-Application services in `backend/src/LevelMovement.Application/Services` coordinate
-loading entities, invoking their business operations, and mapping responses.
-`VehicleRepository` handles EF queries, additions, and staging updates with the
-client's expected concurrency stamp. It does not implement vehicle editing or
-deletion rules. The former `VehicleBookingManager` has been replaced by the
-entity's eligibility operation because that rule depends only on one vehicle.
+Run the following commands from the repository root unless a section says otherwise.
 
-The existing HTTP upsert contract is unchanged: omit the stamp to create, or send
-the latest stamp to update. `UpsertVehicleOrganiser` translates that request into
-explicit `RegisterAsync` or `UpdateAsync` application operations. Updates load the
-existing entity rather than constructing a temporary entity with an empty ID.
-Missing update targets remain 404 responses.
+## First-time setup
 
-The command pipeline saves once after the handler returns. The EF interceptor
-generates the next stamp, and response mapping happens after saving. No-op edits
-still issue a version-checked write, stale writes return 409, and soft-deleted rows
-remain covered by the unique registration index. These persistence protections
-complement the entity's business rules.
+### 1. Configure and start SQL Server
 
-This refactor does not change the database model or require a new schema migration.
-The registration-normalization data migration below is still required for older
-databases. The model represents vehicle management; booking validation does not
-reserve a vehicle or implement date availability.
-
-For explanations, code references, and interview practice, see the
-[study guide](docs/LevelMovement_Principles_Study_Guide.md) or its
-[Word version](docs/LevelMovement_Principles_Study_Guide.docx).
-
-## Registration identity and display
-
-Registration numbers are stored and returned by the API in uppercase with all
-whitespace removed. `KW00KBGP`, `KW 00 KB GP`, and `kw 00 kb gp` identify the same
-vehicle for creation, lookup, updates, deletion, and booking checks. The 20-character
-limit applies after whitespace removal. Punctuation is preserved.
-
-The frontend displays plates matching `AA00AAGP` as `AA 00 AA GP`, including form
-values and confirmation messages, while requests and cache keys use the compact
-value. Other plate formats retain their compact value without guessed grouping.
-
-The `NormalizeVehicleRegistrations` migration updates existing rows, including
-soft-deleted vehicles, and refreshes the stamps of changed rows. It refuses to
-proceed if normalization would create duplicate registrations; resolve these
-records explicitly before rerunning it. No rows are automatically merged or
-deleted. Rolling back the migration does not reconstruct the original spacing.
-Apply the migration before running the updated API against an existing database.
-
-## Run the backend with Docker
-
-Prerequisites: Docker Desktop (or Docker Engine with Compose v2), running Linux
-containers on an x86-64 machine. Allow at least 2 GB for SQL Server plus capacity
-for the API and builds. No local SQL Server is needed. Install the .NET 10 SDK to set up the local HTTPS certificate.
-
-From the repository root, run in PowerShell:
+Copy the environment template only if you do not already have a local file:
 
 ```powershell
-cd backend
-Copy-Item .env.example .env
-# Set a local password in .env
-./scripts/Setup-LocalHttps.ps1
-docker compose up --build -d
+if (!(Test-Path backend/.env)) {
+    Copy-Item backend/.env.example backend/.env
+}
 ```
 
-Only copy the example on first setup; do not overwrite an existing .env.
-Replace its sample password with a strong development password before starting.
-On Linux/macOS, use `cp .env.example .env` instead of `Copy-Item`.
-The real .env is ignored by Git.
-
-Open [Swagger](https://localhost:5080/swagger) to try the create-vehicle endpoint
-with its request and response examples.
-
-Compose starts SQL Server, waits for it to become healthy, applies EF Core
-migrations to create the LevelMovement database and Vehicles table, then starts
-the API. The initial image downloads and build can take several minutes.
-
-This is a local development setup using SQL Server Developer edition. The Compose
-configuration accepts the [SQL Server container license terms](https://learn.microsoft.com/en-us/sql/linux/quickstart-install-connect-docker)
-through ACCEPT_EULA=Y.
-
-## Database access
-
-To connect through SQL Server Management Studio:
-
-- Server: `localhost,14330`
-- Authentication: SQL Server Authentication
-- Login: `sa`
-- Password: the value in your local `backend/.env`
-- Trust the server certificate for this local development connection.
-
-The API container connects to `sqlserver,1433` automatically. A locally launched
-API from Visual Studio needs its connection string overridden separately; .NET
-does not read Compose's .env automatically. Use user secrets or
-`ConnectionStrings__LevelMovement`, with the host address above.
-
-Data persists in a Docker named volume. Changing .env does not rotate the password
-in an existing SQL Server volume. Keep the original password or change it through
-SQL Server. Existing Windows databases are not imported or modified.
-
-## Stop and troubleshoot
-
-Run these commands from backend:
+Edit `backend/.env` and set `MSSQL_SA_PASSWORD` to your development SQL password.
+Keep an existing working password when reusing the database volume.
 
 ```powershell
-docker compose ps -a
-docker compose logs sqlserver migrate api
-docker compose down
+docker compose --env-file backend/.env -f backend/compose.yaml up -d sqlserver
+docker compose --env-file backend/.env -f backend/compose.yaml ps sqlserver
 ```
 
-`down` preserves database data. Adding `--volumes` deletes that data.
-Change SQL_PORT or API_PORT in .env if the default ports are occupied.
-An exited migration container with exit code 0 is expected.
+Wait until SQL Server reports healthy. This command starts the database service;
+the API runs locally in the following steps. Compose also contains optional
+API/migration services, so specify `sqlserver` for this development workflow.
 
-## Frontend
+The database files persist in the `sqlserver-data` Docker volume. Editing
+`MSSQL_SA_PASSWORD` in the environment file does not change an existing SQL login.
 
-The frontend is independent of the .NET solution and includes vehicle CRUD and booking eligibility.
-With Node.js 22.12+ installed, run from the repository root:
+### 2. Prepare HTTPS and restore the backend
+
+```powershell
+./backend/scripts/Setup-LocalHttps.ps1
+dotnet restore backend/LevelMovement.slnx
+```
+
+Accept the Windows certificate trust prompt. The script prepares the localhost
+certificate used by the frontend; .NET uses the trusted development certificate
+for the local API. Certificate files and passwords are ignored by Git.
+
+### 3. Configure the local API connection
+
+Skip this step if the project already has a working connection in user secrets.
+Replace `YOUR_CURRENT_SQL_PASSWORD` with the actual SQL login password:
+
+```powershell
+dotnet user-secrets set "ConnectionStrings:LevelMovement" 'Server=tcp:127.0.0.1,14330;Database=LevelMovement;User Id=sa;Password="YOUR_CURRENT_SQL_PASSWORD";Encrypt=True;TrustServerCertificate=True;' --project backend/src/LevelMovement.Api
+```
+
+The API does not automatically read Docker Compose's `backend/.env`. User secrets
+supply the password for the locally launched API without committing it to source.
+
+For SSMS, use server `localhost,14330`, SQL Server Authentication, login `sa`,
+the current SQL password, and trust the server certificate for this local database.
+
+### 4. Create or update the database
+
+```powershell
+dotnet run --project backend/src/LevelMovement.Api --no-launch-profile -- --migrate --environment Development
+```
+
+This applies the existing EF Core migrations and exits. Normal API startup does
+not apply migrations automatically.
+
+For an older database, the registration-normalization migration removes
+whitespace and uppercases registrations, including deleted rows. It stops if that
+would create duplicates, so resolve conflicting registrations before retrying.
+Changed registrations receive fresh concurrency stamps. Rolling back does not
+reconstruct the original spacing.
+
+### 5. Seed the demo fleet
+
+```powershell
+dotnet run --project backend/src/LevelMovement.Api --no-launch-profile -- --seed-demo --environment Development
+```
+
+The command applies migrations, adds missing demo vehicles, and exits. Seeding is
+allowed only in Development. The catalog contains 50 registrations,
+`DEMO001GP` through `DEMO050GP`, with explicit model years and positive daily rates.
+The Fronx entry uses year 2023.
+
+Rerunning preserves existing edits, dates, and deleted vehicles. It skips
+registrations that already exist, including soft-deleted ones. It does not reset
+the database or restore deleted vehicles. New records use `Vehicle.Register`
+and receive their concurrency stamps when saved.
+
+## Run the app
+
+### API: Visual Studio or a terminal
+
+Open `backend/LevelMovement.slnx`, select `LevelMovement.Api` as the startup
+project, choose its `LevelMovement.Api` launch profile, and press F5.
+
+Alternatively:
+
+```powershell
+dotnet run --project backend/src/LevelMovement.Api --launch-profile LevelMovement.Api
+```
+
+Keep this process running. Swagger is at
+[https://localhost:63887/swagger](https://localhost:63887/swagger).
+
+### Frontend: a second terminal
 
 ```powershell
 cd frontend
@@ -132,27 +125,171 @@ npm ci
 npm run dev
 ```
 
-Open https://localhost:5173. Run the HTTPS setup script above before the first frontend start.
-The proxy defaults to the Visual Studio API at https://localhost:63887. To use Docker,
-set `API_TARGET=https://localhost:5080` in `frontend/.env.local` and restart Vite.
-Certificate files and passwords stay in ignored `backend/certs` and `backend/.env`.
-All web listeners use HTTPS; the proxy verifies the development certificate.
+Open [https://localhost:5173](https://localhost:5173). `npm ci` installs Vite and
+the other dependencies; run it after cloning or when the lock file changes.
+For subsequent starts, `npm run dev` is enough.
 
-## Backend development
+Vite proxies API requests to `https://localhost:63887` and verifies its certificate.
+If you deliberately use another HTTPS API port, copy `frontend/.env.example` to
+`frontend/.env.local`, set `API_TARGET`, and restart Vite.
 
-The solution is `backend/LevelMovement.slnx`. With .NET 10 installed:
+### Everyday startup and shutdown
+
+1. Start Docker Desktop and the `sqlserver` service using the command above.
+2. Run the API with F5 or the launch-profile command.
+3. Run `npm run dev` from `frontend`.
+4. Refresh the browser after restarting the API with a changed response contract.
+
+Stop the local API and frontend with Ctrl+C, or stop debugging in Visual Studio.
+To stop SQL Server while keeping its container and data:
 
 ```powershell
+docker compose --env-file backend/.env -f backend/compose.yaml stop sqlserver
+```
+
+Do not remove the database volume when you want to preserve your demo records.
+
+## API contract
+
+| Request | Behavior |
+| --- | --- |
+| `GET /api/vehicles?pageNumber=1&pageSize=10` | Page of active vehicles with pagination metadata |
+| `GET /api/vehicles/{registrationNumber}` | Details and the current edit/delete stamp |
+| `POST /api/vehicles` without a stamp | Register a vehicle; returns 201 |
+| `POST /api/vehicles` with the latest stamp | Update an existing vehicle; returns 200 |
+| `DELETE /api/vehicles/{registrationNumber}` | Soft-delete; JSON body contains `concurrencyStamp` |
+| `POST /api/bookings/validate` | Read-only eligibility check; body contains `registrationNumber` |
+
+The list response has four fields:
+
+```json
+{
+  "items": [],
+  "pageNumber": 1,
+  "totalPages": 0,
+  "count": 0
+}
+```
+
+`items` contains the requested page. `pageNumber` is the requested page number.
+`totalPages` is calculated from **all active vehicles** and the requested page
+size. `count` is **only the number of vehicles in the current page**, equal to
+`items.length`. For example, 49 active vehicles with size 10 produce five pages;
+page 5 returns nine items, `pageNumber: 5`, `totalPages: 5` and `count: 9`.
+
+Page number defaults to 1 and must be positive. Page size defaults to 10 and must
+be between 1 and 100; invalid parameters return HTTP 400. An out-of-range page
+returns empty items and count 0 while preserving the total pages. An empty fleet
+has totalPages 0. Items are sorted by unique registration number. Deleted vehicles
+are excluded from the rows and the total-page calculation.
+
+Summary items contain registration, make, model, year, daily rate and creation
+date. They omit IDs and concurrency stamps. Load details before editing or
+deleting, and use the latest stamp returned by details or a successful save.
+
+Registration numbers are uppercase with whitespace removed. `KW00KBGP`,
+`KW 00 KB GP` and `kw 00 kb gp` identify the same vehicle. Punctuation stays intact.
+The frontend displays supported GP plates with spacing but sends the compact
+identity. Daily rates use two decimal places with banker's rounding. The API
+currently validates vehicle years from 1000 through 2026.
+
+Validation failures return 400, missing/deleted details return 404, and stale
+stamps or duplicate registrations return 409. Booking checks return 409 for a
+deleted vehicle and 404 for an unknown vehicle. Checks do not create bookings
+or model date availability.
+
+The frontend reads page and size from the URL, offers 10/25/50 rows, and resets
+to page 1 when size changes. It uses the returned `totalPages` for navigation.
+Back and Cancel preserve the list URL. Saving invalidates list pages; deletion
+clears list/detail caches and returns to a valid page. Missing details show
+"This vehicle is no longer available" with a link to the refreshed list.
+
+## Architecture and patterns
+
+| Area / pattern | Responsibility and location |
+| --- | --- |
+| Layered architecture | `backend/src` separates Domain, Application, Infrastructure and API. Dependency injection wires implementations in `Api/Extensions/ConfigurationExtension.cs`. |
+| Domain model / aggregate root | `Domain/Vehicles/Vehicle.cs` owns register, update, delete and booking-eligibility operations. Private setters protect identity, creation date and valid state. |
+| Value objects | `RegistrationNumber` normalizes identity; `VehicleYear` and `DailyRate` validate and represent vehicle values. |
+| Repository | `IVehicleRepository` abstracts persistence. `VehicleRepository` performs ordered, paged EF queries and stages concurrency-checked updates. Its page method returns a list; a separate scalar count query supports total pages. |
+| Application services and organisers | Services load entities, invoke domain operations and map DTOs. Organisers coordinate use cases, including routing an upsert to explicit register/update operations. |
+| CQRS with MediatR | Commands handle writes and queries handle reads. Both use the same database; there are no separate read/write databases. |
+| Pipeline behaviors | Request context identifies the CQRS operation, FluentValidation rejects invalid inputs, and Unit of Work saves once for successful commands. Read queries do not save. |
+| Optimistic concurrency | A GUID stamp detects stale edits/deletes. The EF interceptor generates a new stamp on writes; mapping the save response after persistence returns the latest stamp. |
+| Soft deletion | `IsDeleted` preserves the row. An EF global filter hides it from active reads/counts; booking checks deliberately include it to explain why it is unavailable. The unique registration index still reserves deleted registrations. |
+| DTOs and API boundary | Responses expose the fields needed by each screen. Central exception handling returns Problem Details and keeps diagnostic information in server logs. Swagger documents examples and status codes. |
+| React feature structure | `frontend/src/features/vehicles` separates API calls, DTOs, validation, controller hooks and views. |
+| Frontend state and validation | React Query manages cached server data; React Hook Form and Zod validate forms and responses. URL parameters own paging state, and query keys include page and size. |
+
+Request flow: controller → MediatR behaviors → handler → organiser → application
+service → repository / domain operation → persistence → response mapping.
+
+Edits preserve registration, identity and creation date. A no-op update still
+checks the expected stamp. Domain validation runs before mutation, so a rejected
+change leaves the entity intact. GUID concurrency protection complements these
+domain rules.
+
+## Data cleanup
+
+The seed audit found all 50 catalog records valid after the Fronx year correction.
+No catalog entry needs deleting. `DEMO001GP` remains soft-deleted and is intentionally
+excluded from the active fleet.
+
+The approved cleanup removes the invalid non-seeded Ford Ranger `XCV334GP`
+(year 2029), plus explicitly listed completed browser-test records. The script
+never targets the `DEMO001GP`–`DEMO050GP` fleet:
+
+[backend/scripts/Clean-DemoData.sql](backend/scripts/Clean-DemoData.sql)
+
+In SSMS, open the script against the local server and run it with
+`@ApplyCleanup = 0` to preview. Change that value to 1 to permanently delete the
+listed matching rows. The script uses a transaction, skips corrected/restored
+rows, reports removed registrations, and then audits the seed records. Running
+it again after cleanup removes zero rows. Reseeding will not recreate these
+non-catalog records.
+
+## Verification
+
+Backend build and tests (tests use an isolated SQLite database):
+
+```powershell
+dotnet build backend/LevelMovement.slnx
 dotnet test backend/LevelMovement.slnx
 ```
 
-After changing the EF model, generate and review a migration from backend:
+Frontend unit tests and production build:
 
 ```powershell
-dotnet tool restore
-dotnet ef migrations add DescribeYourChange --project src/LevelMovement.Infrastructure --startup-project src/LevelMovement.Api -- --environment Development
-docker compose up --build -d
+cd frontend
+npm test
+npm run build
 ```
 
-Commit migration files alongside code changes. Repository layers are Domain,
-Application, Infrastructure and API; the frontend is not part of the solution.
+Browser tests require the local API and SQL Server running. From `frontend`:
+
+```powershell
+npx playwright install chromium
+$env:NODE_EXTRA_CA_CERTS = (Resolve-Path ../backend/certs/localhost.pem).Path
+npm run test:e2e
+```
+
+Playwright starts or reuses Vite on port 5173. Set `E2E_PORT` to use another port.
+CRUD browser tests create their own `E2E-`/`RACE-` registrations and soft-delete
+them; they do not reset the seed fleet. Backend coverage includes all 50 seeded
+vehicles, active filtering, page boundaries and concurrency. Frontend coverage
+includes paging URLs, size changes, return navigation, caches and detail 404s.
+
+## Troubleshooting
+
+| Symptom | Action |
+| --- | --- |
+| `vite is not recognized` | Run `npm ci` in `frontend`, then `npm run dev`. |
+| SQL login fails | Verify the current login password and the local API user-secret connection. Changing `.env` alone does not rotate an existing SQL password. |
+| SQL container is starting | Inspect `docker compose --env-file backend/.env -f backend/compose.yaml logs sqlserver` and wait for a healthy state. |
+| Browser/proxy HTTPS error | Run the HTTPS setup script as the user running the app, accept trust, and restart the API/frontend. Use the HTTPS addresses above. |
+| Build files locked by the running API | Stop debugging before rebuilding, or test with `dotnet test backend/LevelMovement.slnx --artifacts-path backend/.artifacts`. |
+| Metadata file / CS0006 error | Build the solution and fix the first error in the referenced project; missing reference assemblies are often secondary errors. |
+| Save/delete returns 409 | Reload the latest details before saving or deleting again. |
+| Details return 404 | The registration is missing or deleted; return to the active list. |
+| Vitest workers cannot start | Check the Node version. With a supported runtime, try `npm test -- --pool=threads --maxWorkers=1`. |
+| A port is already in use | Stop the old process or choose a new API/Vite port and update `API_TARGET` to match. |

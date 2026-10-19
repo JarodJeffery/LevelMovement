@@ -12,7 +12,7 @@ public sealed class VehicleExamplesFilter : IOperationFilter
         operation.Summary = method switch
         {
             "Upsert" => "Insert or update a vehicle",
-            "GetAll" => "List active vehicles without stamps",
+            "GetAll" => "List a page of active vehicles",
             "GetDetails" => "Get vehicle details and its edit/delete stamp",
             "Delete" => "Soft-delete a vehicle using its latest stamp",
             _ => "Check booking eligibility without saving a booking"
@@ -20,11 +20,26 @@ public sealed class VehicleExamplesFilter : IOperationFilter
         operation.Description = method switch
         {
             "Upsert" => "Omit the stamp to insert (201); supply the latest detail or save response stamp to update (200). Registration stays fixed. Whitespace is ignored and registrations are stored and returned in uppercase without spaces (KW 00 KB GP becomes KW00KBGP). Rates use banker’s rounding.",
-            "GetAll" => "Deleted vehicles are excluded. No IDs or stamps are returned.",
+            "GetAll" => "Returns items, pageNumber, totalPages and count (vehicles on the current page). Total pages are calculated from all active vehicles. Deleted vehicles are excluded from items and page totals. Sorted by registration number. Defaults to page 1 and 10 rows. Page number must be positive; page size must be between 1 and 100. Pages beyond the end have empty items and count 0; an empty fleet has totalPages 0. No IDs or stamps are returned.",
             "GetDetails" => "Registration lookup requires no input stamp. Return the stamp to save or delete. Deleted vehicles return 404.",
             "Delete" => "Send the latest stamp in the JSON body. Stale stamps return 409; deleted or missing vehicles return 404.",
             _ => "Active vehicles return 200, deleted vehicles 409, unknown registrations 404. This is a read-only eligibility demo."
         };
+        if (method == "GetAll" && operation.Parameters is { } parameters)
+        {
+            foreach (var parameter in parameters.OfType<OpenApiParameter>())
+            {
+                parameter.Description = parameter.Name == "pageNumber"
+                    ? "Page number starting at 1 (default 1)."
+                    : "Number of rows from 1 to 100 (default 10).";
+                parameter.Example = JsonValue.Create(parameter.Name == "pageNumber" ? 1 : 10);
+                if (parameter.Schema is OpenApiSchema schema)
+                {
+                    schema.Minimum = "1";
+                    if (parameter.Name == "pageSize") schema.Maximum = "100";
+                }
+            }
+        }
         if (operation.RequestBody?.Content is { } requestContent)
         {
             foreach (var media in requestContent.Values)
@@ -49,11 +64,12 @@ public sealed class VehicleExamplesFilter : IOperationFilter
             if (response.Content is null) continue;
             JsonNode example = status switch
             {
+                "400" when method == "GetAll" => JsonNode.Parse("""{"title":"One or more validation errors occurred.","status":400,"errors":{"pageSize":["Page size must be between 1 and 100."]}}""")!,
                 "400" => JsonNode.Parse("""{"title":"One or more validation errors occurred.","status":400,"errors":{"registrationNumber":["Registration number is required."]}}""")!,
                 "404" => JsonNode.Parse("""{"title":"Vehicle was not found.","status":404,"detail":"No vehicle is available for this operation."}""")!,
                 "409" => JsonNode.Parse(method == "Validate" ? """{"title":"Vehicle cannot be booked.","status":409,"detail":"Deleted vehicles cannot be booked."}""" : """{"title":"Vehicle has changed.","status":409,"detail":"Reload the vehicle and use its latest concurrency stamp before updating or deleting."}""")!,
                 "500" => JsonNode.Parse("""{"title":"An unexpected error occurred.","status":500,"detail":"Please try again. If the problem continues, contact support."}""")!,
-                _ when method == "GetAll" => new JsonArray(vehicle.DeepClone()),
+                _ when method == "GetAll" => new JsonObject { ["items"] = new JsonArray(vehicle.DeepClone()), ["pageNumber"] = 1, ["totalPages"] = 1, ["count"] = 1 },
                 _ when method == "GetDetails" => vehicle.DeepClone(),
                 _ when method == "Validate" => JsonNode.Parse("""{"registrationNumber":"KW00KBGP","eligible":true,"message":"Vehicle KW00KBGP is eligible for booking. No booking has been created."}""")!,
                 _ => JsonNode.Parse("""{"registrationNumber":"KW00KBGP","make":"Toyota","model":"Corolla","message":"Updated vehicle KW00KBGP, make Toyota, model Corolla.","concurrencyStamp":"823dff0e-1ab9-41cb-8f24-4d4ee02a7ae2"}""")!

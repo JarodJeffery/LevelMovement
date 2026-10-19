@@ -18,7 +18,7 @@ public sealed class UpsertVehicleCommandValidator : AbstractValidator<UpsertVehi
             .WithMessage("Registration number must not exceed 20 characters.");
         RuleFor(command => command.Make).NotEmpty().MaximumLength(100);
         RuleFor(command => command.Model).NotEmpty().MaximumLength(100);
-        RuleFor(command => command.Year).InclusiveBetween(1000, 9999);
+        RuleFor(command => command.Year).InclusiveBetween(1000, 2026);
         RuleFor(command => command.DailyRate)
             .Cascade(CascadeMode.Stop).NotEmpty()
             .Must(value => decimal.Round(value, 2, MidpointRounding.ToEven)

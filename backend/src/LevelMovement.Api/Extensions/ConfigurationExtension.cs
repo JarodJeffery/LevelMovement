@@ -77,6 +77,7 @@ public static class ConfigurationExtension
         services.AddScoped<DeleteVehicleOrganiser>();
         services.AddScoped<BookingEligibilityOrganiser>();
         services.AddScoped<IValidator<GetVehicleDetailsQuery>, GetVehicleDetailsValidator>();
+        services.AddScoped<IValidator<GetVehiclesQuery>, GetVehiclesValidator>();
         services.AddScoped<IValidator<DeleteVehicleCommand>, DeleteVehicleValidator>();
         services.AddScoped<IValidator<ValidateBookingQuery>, ValidateBookingValidator>();
     }
