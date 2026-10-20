@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 using LevelMovement.Api.Extensions;
 using Microsoft.AspNetCore.Mvc;
+using LevelMovement.Api.Security;
 
 var migrateOnly = args.Contains("--migrate");
 var seedDemo = args.Contains("--seed-demo");
@@ -28,13 +29,25 @@ builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = 
     context.ProblemDetails.Extensions.Remove("traceId"));
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddEndpointsApiExplorer();
+if (!migrateOnly && !seedDemo) builder.Services.AddApiKeySecurity();
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
     {
         Title = "Level Movement Vehicles API",
         Version = "v1",
-        Description = "Vehicle CRUD and booking eligibility demo with example requests and responses."
+        Description = "Vehicle CRUD and booking eligibility demo. Every API request requires an X-Api-Key header. Enter the configured key using Authorize."
+    });
+    options.AddSecurityDefinition(ApiKeyOptions.Scheme, new OpenApiSecurityScheme
+    {
+        Type = SecuritySchemeType.ApiKey,
+        In = ParameterLocation.Header,
+        Name = ApiKeyOptions.HeaderName,
+        Description = "Enter the configured API key. Do not add a Bearer prefix."
+    });
+    options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecuritySchemeReference(ApiKeyOptions.Scheme, document)] = []
     });
     options.OperationFilter<VehicleExamplesFilter>();
 });
@@ -84,7 +97,9 @@ if (app.Environment.IsDevelopment())
         options.SwaggerEndpoint("/swagger/v1/swagger.json", "Vehicles API v1"));
 }
 
-app.MapControllers();
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapControllers().RequireAuthorization();
 
 app.Run();
 

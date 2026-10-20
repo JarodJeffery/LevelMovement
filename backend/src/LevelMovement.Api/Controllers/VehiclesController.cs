@@ -8,6 +8,7 @@ namespace LevelMovement.Api.Controllers;
 
 [ApiController]
 [Route("api/vehicles")]
+[ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
 [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError)]
 public sealed class VehiclesController(ISender sender) : ControllerBase
 {

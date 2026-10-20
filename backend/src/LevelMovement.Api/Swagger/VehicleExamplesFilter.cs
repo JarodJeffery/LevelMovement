@@ -64,6 +64,7 @@ public sealed class VehicleExamplesFilter : IOperationFilter
             if (response.Content is null) continue;
             JsonNode example = status switch
             {
+                "401" => JsonNode.Parse("""{"title":"Unauthorized","status":401,"detail":"A valid API key is required."}""")!,
                 "400" when method == "GetAll" => JsonNode.Parse("""{"title":"One or more validation errors occurred.","status":400,"errors":{"pageSize":["Page size must be between 1 and 100."]}}""")!,
                 "400" => JsonNode.Parse("""{"title":"One or more validation errors occurred.","status":400,"errors":{"registrationNumber":["Registration number is required."]}}""")!,
                 "404" => JsonNode.Parse("""{"title":"Vehicle was not found.","status":404,"detail":"No vehicle is available for this operation."}""")!,

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace LevelMovement.Api.Controllers;
 [ApiController]
 [Route("api/bookings")]
+[ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
 public sealed class BookingsController(ISender sender) : ControllerBase
 {
     [HttpPost("validate")]

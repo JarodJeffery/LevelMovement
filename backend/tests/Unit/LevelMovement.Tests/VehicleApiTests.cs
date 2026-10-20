@@ -12,6 +12,8 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Configuration;
+using LevelMovement.Api.Security;
 
 namespace LevelMovement.Tests;
 
@@ -228,19 +230,24 @@ public sealed class VehicleApiTests
 
     public sealed class VehicleApiFactory : WebApplicationFactory<Program>
     {
+        public const string TestApiKey = "LevelMovement.TestKey_Only";
         private readonly SqliteConnection _connection = new("Data Source=:memory:");
         public int SaveCalls { get; private set; }
 
         private readonly Action<IServiceCollection>? _configure;
-        public VehicleApiFactory(Action<IServiceCollection>? configure = null)
+        private readonly string? _apiKey;
+        public VehicleApiFactory(Action<IServiceCollection>? configure = null, string? apiKey = TestApiKey)
         {
             _configure = configure;
+            _apiKey = apiKey;
             _connection.Open();
         }
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseEnvironment("Development");
+            builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
+                new Dictionary<string, string?> { ["Security:ApiKey"] = _apiKey }));
             builder.ConfigureServices(services =>
             {
                 services.RemoveAll<LevelMovementDbContext>();
@@ -257,6 +264,12 @@ public sealed class VehicleApiTests
                 });
                 _configure?.Invoke(services);
             });
+        }
+
+        protected override void ConfigureClient(HttpClient client)
+        {
+            base.ConfigureClient(client);
+            client.DefaultRequestHeaders.Add(ApiKeyOptions.HeaderName, TestApiKey);
         }
 
         protected override void Dispose(bool disposing)
